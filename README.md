@@ -1,6 +1,9 @@
 <h1>🖧 Computer Network Simulation</h1> <br>
 
 <h2>A C-based simulation of a computer network using graphs, demonstrating concepts from data structures such as adjacency lists, Dijkstra's algorithm, and multithreading for simulating data transfer.</h2> <br>
+<h3>Current Implementation </h3> <br>
+Implemented a dynamic computer network simulation with route management, shortest path computation using Dijkstra’s algorithm, data transfer simulation using multithreading, and live network statistics. <br>
+
 <h3>Features</h3> <br>
 1. Add or remove computers (nodes) from the network. <br>
 2. Connect computers via routes (edges) with custom latency (weights).  <br>
