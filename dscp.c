@@ -185,7 +185,18 @@ int main() {
             int start, end;
             printf("Enter source and destination computers: ");
             scanf("%d %d", &start, &end);
-            dijkstra(start, end);
+            printf("Choose algorithm: 1. Dijkstra  2. Bellman-Ford\n");
+            int alg;
+            printf("Enter choice: ");
+            scanf("%d", &alg);
+            if (alg == 1) {
+                dijkstra(start, end);
+            } else if (alg == 2) {
+                bellman_ford(start, end);
+            } else {
+                printf("Invalid algorithm choice! Defaulting to Dijkstra.\n");
+                dijkstra(start, end);
+            }
         } else if (choice == 6) {
             int from, to, packets;
             printf("Enter source, destination, and packets: ");
@@ -204,4 +215,70 @@ int main() {
         }
     }
     return 0;
+}
+
+void bellman_ford(int start, int end) {
+    int distance[MAX_NODES];
+    int previous[MAX_NODES];
+
+    for (int i = 0; i < nodes; i++) {
+        distance[i] = INT_MAX;
+        previous[i] = -1;
+    }
+    distance[start] = 0;
+
+    // Relax edges repeatedly
+    for (int iter = 0; iter < nodes - 1; iter++) {
+        bool updated = false;
+        for (int u = 0; u < nodes; u++) {
+            if (distance[u] == INT_MAX) continue;
+            Edge* e = graph[u];
+            while (e) {
+                int v = e->destination;
+                int w = e->weight;
+                if (distance[u] + w < distance[v]) {
+                    distance[v] = distance[u] + w;
+                    previous[v] = u;
+                    updated = true;
+                }
+                e = e->next;
+            }
+        }
+        if (!updated) break; // no change -> stop early
+    }
+
+    // Check for negative weight cycles
+    bool negCycle = false;
+    for (int u = 0; u < nodes; u++) {
+        if (distance[u] == INT_MAX) continue;
+        Edge* e = graph[u];
+        while (e) {
+            int v = e->destination;
+            int w = e->weight;
+            if (distance[u] + w < distance[v]) {
+                negCycle = true;
+                break;
+            }
+            e = e->next;
+        }
+        if (negCycle) break;
+    }
+
+    if (negCycle) {
+        printf("Negative weight cycle detected - shortest paths may be undefined.\n");
+    }
+
+    if (distance[end] == INT_MAX) {
+        printf("\nNo path from %d to %d found.\n", start, end);
+        return;
+    }
+
+    printf("\nShortest path from %d to %d: %dms\n", start, end, distance[end]);
+    printf("Path: ");
+    int current = end;
+    while (current != -1) {
+        printf("%d <- ", current);
+        current = previous[current];
+    }
+    printf("END\n");
 }
