@@ -13,6 +13,7 @@ export interface NetworkNode {
 export interface PathResult {
   distance: number;
   path: number[];
+  edges: Array<{ from: number; to: number; weight: number }>; // Specific edges used
   algorithm: 'dijkstra' | 'bellman-ford';
 }
 
@@ -102,6 +103,7 @@ export class NetworkSimulator {
 
     const distance: number[] = new Array(n).fill(Infinity);
     const previous: number[] = new Array(n).fill(-1);
+    const edgeUsed: Array<{ from: number; to: number; weight: number } | null> = new Array(n).fill(null);
     const visited: boolean[] = new Array(n).fill(false);
     
     distance[start] = 0;
@@ -125,23 +127,30 @@ export class NetworkSimulator {
         if (!visited[v] && distance[minIndex] + edge.weight < distance[v]) {
           distance[v] = distance[minIndex] + edge.weight;
           previous[v] = minIndex;
+          edgeUsed[v] = { from: minIndex, to: v, weight: edge.weight };
         }
       });
     }
 
     if (distance[end] === Infinity) return null;
 
-    // Reconstruct path
+    // Reconstruct path and edges
     const path: number[] = [];
+    const edges: Array<{ from: number; to: number; weight: number }> = [];
     let current = end;
+    
     while (current !== -1) {
       path.unshift(current);
+      if (edgeUsed[current]) {
+        edges.unshift(edgeUsed[current]!);
+      }
       current = previous[current];
     }
 
     return {
       distance: distance[end],
       path,
+      edges,
       algorithm: 'dijkstra',
     };
   }
@@ -152,6 +161,7 @@ export class NetworkSimulator {
 
     const distance: number[] = new Array(n).fill(Infinity);
     const previous: number[] = new Array(n).fill(-1);
+    const edgeUsed: Array<{ from: number; to: number; weight: number } | null> = new Array(n).fill(null);
     
     distance[start] = 0;
 
@@ -169,6 +179,7 @@ export class NetworkSimulator {
           if (distance[u] + w < distance[v]) {
             distance[v] = distance[u] + w;
             previous[v] = u;
+            edgeUsed[v] = { from: u, to: v, weight: w };
             updated = true;
           }
         });
@@ -194,17 +205,23 @@ export class NetworkSimulator {
 
     if (distance[end] === Infinity) return null;
 
-    // Reconstruct path
+    // Reconstruct path and edges
     const path: number[] = [];
+    const edges: Array<{ from: number; to: number; weight: number }> = [];
     let current = end;
+    
     while (current !== -1) {
       path.unshift(current);
+      if (edgeUsed[current]) {
+        edges.unshift(edgeUsed[current]!);
+      }
       current = previous[current];
     }
 
     return {
       distance: distance[end],
       path,
+      edges,
       algorithm: 'bellman-ford',
     };
   }

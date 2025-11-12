@@ -3,15 +3,14 @@ import { NetworkNode, Edge } from '../lib/networkSimulator';
 
 interface NetworkGraphProps {
   nodes: NetworkNode[];
-  highlightedPath?: number[];
+  highlightedEdges?: Array<{ from: number; to: number; weight: number }>;
 }
 
-export const NetworkGraph: React.FC<NetworkGraphProps> = ({ nodes, highlightedPath = [] }) => {
+export const NetworkGraph: React.FC<NetworkGraphProps> = ({ nodes, highlightedEdges = [] }) => {
   const width = 800;
   const height = 500;
   const radius = 30;
 
-  // Position nodes in a circular layout
   const positions = nodes.map((_, index) => {
     const angle = (2 * Math.PI * index) / nodes.length - Math.PI / 2;
     const x = width / 2 + (width / 3) * Math.cos(angle);
@@ -19,24 +18,24 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({ nodes, highlightedPa
     return { x, y };
   });
 
-  const isEdgeHighlighted = (from: number, to: number): boolean => {
-    if (highlightedPath.length < 2) return false;
-    for (let i = 0; i < highlightedPath.length - 1; i++) {
-      if (
-        (highlightedPath[i] === from && highlightedPath[i + 1] === to) ||
-        (highlightedPath[i] === to && highlightedPath[i + 1] === from)
-      ) {
-        return true;
-      }
-    }
-    return false;
+  const isEdgeHighlighted = (from: number, to: number, weight: number): boolean => {
+    return highlightedEdges.some(
+      edge => 
+        ((edge.from === from && edge.to === to) || 
+         (edge.from === to && edge.to === from)) &&
+        edge.weight === weight
+    );
   };
 
-  // Collect all unique edges (group by node pair)
+  const isNodeHighlighted = (nodeId: number): boolean => {
+    return highlightedEdges.some(
+      edge => edge.from === nodeId || edge.to === nodeId
+    );
+  };
+
   const edgeGroups: Map<string, Edge[]> = new Map();
   nodes.forEach((node, fromIdx) => {
     node.edges.forEach((edge) => {
-      // Create a key that's consistent regardless of direction
       const key = fromIdx < edge.destination 
         ? `${fromIdx}-${edge.destination}` 
         : `${edge.destination}-${fromIdx}`;
@@ -44,7 +43,6 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({ nodes, highlightedPa
       if (!edgeGroups.has(key)) {
         edgeGroups.set(key, []);
       }
-      // Only add if we haven't seen this exact edge from the lower index
       if (fromIdx < edge.destination) {
         edgeGroups.get(key)!.push(edge);
       }
@@ -54,25 +52,21 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({ nodes, highlightedPa
   return (
     <div className="border rounded-lg p-4 bg-white">
       <svg width={width} height={height} className="mx-auto">
-        {/* Draw edges */}
         {Array.from(edgeGroups.entries()).map(([key, edges]) => {
           const [fromStr, toStr] = key.split('-');
           const fromIdx = parseInt(fromStr);
           const toIdx = parseInt(toStr);
           const from = positions[fromIdx];
           const to = positions[toIdx];
-          const highlighted = isEdgeHighlighted(fromIdx, toIdx);
 
-          // If multiple edges, curve them slightly
           return edges.map((edge, idx) => {
+            const highlighted = isEdgeHighlighted(fromIdx, toIdx, edge.weight);
             const midX = (from.x + to.x) / 2;
             const midY = (from.y + to.y) / 2;
             
-            // Calculate offset for multiple edges
             const totalEdges = edges.length;
             const offset = totalEdges > 1 ? (idx - (totalEdges - 1) / 2) * 20 : 0;
             
-            // Perpendicular offset for curved lines
             const dx = to.x - from.x;
             const dy = to.y - from.y;
             const len = Math.sqrt(dx * dx + dy * dy);
@@ -82,13 +76,12 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({ nodes, highlightedPa
             const controlX = midX + perpX;
             const controlY = midY + perpY;
 
-            // Use quadratic curve for multiple edges
             const pathD = totalEdges > 1
               ? `M ${from.x} ${from.y} Q ${controlX} ${controlY} ${to.x} ${to.y}`
               : `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
 
             return (
-              <g key={`edge-${key}-${idx}`}>
+              <g key={`edge-${key}-${idx}-${edge.weight}`}>
                 <path
                   d={pathD}
                   stroke={highlighted ? '#3b82f6' : '#94a3b8'}
@@ -99,7 +92,7 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({ nodes, highlightedPa
                 <text
                   x={controlX || midX}
                   y={(controlY || midY) - 5}
-                  fill="#64748b"
+                  fill={highlighted ? '#1e40af' : '#64748b'}
                   fontSize="11"
                   fontWeight="bold"
                   textAnchor="middle"
@@ -112,10 +105,9 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({ nodes, highlightedPa
           });
         })}
 
-        {/* Draw nodes */}
         {nodes.map((node, index) => {
           const pos = positions[index];
-          const isHighlighted = highlightedPath.includes(index);
+          const highlighted = isNodeHighlighted(index);
 
           return (
             <g key={`node-${index}`}>
@@ -123,9 +115,9 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({ nodes, highlightedPa
                 cx={pos.x}
                 cy={pos.y}
                 r={radius}
-                fill={isHighlighted ? '#3b82f6' : '#f1f5f9'}
-                stroke={isHighlighted ? '#1e40af' : '#64748b'}
-                strokeWidth={isHighlighted ? 3 : 2}
+                fill={highlighted ? '#3b82f6' : '#f1f5f9'}
+                stroke={highlighted ? '#1e40af' : '#64748b'}
+                strokeWidth={highlighted ? 3 : 2}
                 className="transition-all"
               />
               <text

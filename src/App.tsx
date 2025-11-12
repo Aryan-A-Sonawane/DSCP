@@ -183,7 +183,7 @@ function App() {
                 {nodes.length > 0 ? (
                   <NetworkGraph 
                     nodes={nodes} 
-                    highlightedPath={pathResult?.path || []} 
+                    highlightedEdges={pathResult?.edges || []} 
                   />
                 ) : (
                   <div className="flex items-center justify-center h-[500px] border rounded-lg bg-slate-50">
