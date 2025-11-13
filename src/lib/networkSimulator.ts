@@ -15,6 +15,12 @@ export interface PathResult {
   path: number[];
   edges: Array<{ from: number; to: number; weight: number }>; // Specific edges used
   algorithm: 'dijkstra' | 'bellman-ford';
+  error?: string; // Algorithm-specific error messages
+  negativeCycle?: {
+    detected: boolean;
+    affectedNodes: number[];
+    message: string;
+  };
 }
 
 export class NetworkSimulator {
@@ -58,18 +64,27 @@ export class NetworkSimulator {
   addRoute(from: number, to: number, weight: number): boolean {
     if (from < 0 || from >= this.nodes.length || 
         to < 0 || to >= this.nodes.length || 
-        from === to || weight <= 0) {
+        from === to || weight === 0) {
       return false;
     }
 
     // Allow multiple edges between same nodes - algorithm will choose the best
-    // Add forward edge
+    // Note: Negative weights are allowed for testing Bellman-Ford algorithm
+    // Add only forward edge (directed graph)
     this.nodes[from].edges.push({ destination: to, weight });
 
-    // Add reverse edge (undirected graph)
-    this.nodes[to].edges.push({ destination: from, weight });
-
     return true;
+  }
+
+  hasNegativeWeights(): boolean {
+    for (const node of this.nodes) {
+      for (const edge of node.edges) {
+        if (edge.weight < 0) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   removeRoute(from: number, to: number, weight: number): boolean {
@@ -78,7 +93,7 @@ export class NetworkSimulator {
       return false;
     }
 
-    // Remove the specific edge with matching weight
+    // Remove the specific edge with matching weight (directed)
     const fromIndex = this.nodes[from].edges.findIndex(
       e => e.destination === to && e.weight === weight
     );
@@ -86,20 +101,23 @@ export class NetworkSimulator {
       this.nodes[from].edges.splice(fromIndex, 1);
     }
 
-    // Remove reverse edge
-    const toIndex = this.nodes[to].edges.findIndex(
-      e => e.destination === from && e.weight === weight
-    );
-    if (toIndex !== -1) {
-      this.nodes[to].edges.splice(toIndex, 1);
-    }
-
-    return fromIndex !== -1 || toIndex !== -1;
+    return fromIndex !== -1;
   }
 
   dijkstra(start: number, end: number): PathResult | null {
     const n = this.nodes.length;
     if (start < 0 || start >= n || end < 0 || end >= n) return null;
+
+    // Dijkstra's algorithm cannot handle negative weights at all
+    if (this.hasNegativeWeights()) {
+      return {
+        distance: -1,
+        path: [],
+        edges: [],
+        algorithm: 'dijkstra',
+        error: '⚠️ Dijkstra\'s algorithm cannot be used with negative edge weights. Please use Bellman-Ford algorithm instead.'
+      };
+    }
 
     const distance: number[] = new Array(n).fill(Infinity);
     const previous: number[] = new Array(n).fill(-1);
@@ -188,7 +206,10 @@ export class NetworkSimulator {
       if (!updated) break;
     }
 
-    // Check for negative weight cycles
+    // Check for negative weight cycles and identify affected nodes
+    const affectedByNegativeCycle = new Set<number>();
+    let negativeCycleDetected = false;
+
     for (let u = 0; u < n; u++) {
       if (distance[u] === Infinity) continue;
       
@@ -197,10 +218,40 @@ export class NetworkSimulator {
         const w = edge.weight;
         
         if (distance[u] + w < distance[v]) {
-          console.warn('Negative weight cycle detected');
-          return null;
+          negativeCycleDetected = true;
+          // Mark all nodes reachable from v as affected
+          const queue = [v];
+          const visited = new Set<number>();
+          
+          while (queue.length > 0) {
+            const node = queue.shift()!;
+            if (visited.has(node)) continue;
+            visited.add(node);
+            affectedByNegativeCycle.add(node);
+            
+            this.nodes[node].edges.forEach(e => {
+              if (!visited.has(e.destination)) {
+                queue.push(e.destination);
+              }
+            });
+          }
         }
       }
+    }
+
+    // If negative cycle detected and destination is affected, paths are undefined
+    if (negativeCycleDetected && affectedByNegativeCycle.has(end)) {
+      return {
+        distance: -Infinity,
+        path: [],
+        edges: [],
+        algorithm: 'bellman-ford',
+        negativeCycle: {
+          detected: true,
+          affectedNodes: Array.from(affectedByNegativeCycle),
+          message: `Negative weight cycle detected! Nodes ${Array.from(affectedByNegativeCycle).join(', ')} are affected. Shortest paths are undefined because you can loop indefinitely to reduce path weight.`
+        }
+      };
     }
 
     if (distance[end] === Infinity) return null;

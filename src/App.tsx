@@ -63,13 +63,16 @@ function App() {
       return;
     }
     
-    if (weight <= 0) {
-      setMessage('Latency must be greater than 0');
+    if (weight === 0) {
+      setMessage('Latency cannot be 0');
       return;
     }
     
     if (simulator.addRoute(from, to, weight)) {
-      setMessage(`Route added: ${from} ↔ ${to} (${weight}ms). Multiple routes between same nodes are allowed!`);
+      const msg = weight < 0 
+        ? `⚠️ Route added: ${from} → ${to} (${weight}ms). Negative weight! Use Bellman-Ford to detect cycles.`
+        : `Route added: ${from} → ${to} (${weight}ms). Multiple routes between same nodes are allowed!`;
+      setMessage(msg);
       setRouteFrom('');
       setRouteTo('');
       setRouteWeight('');
@@ -81,7 +84,7 @@ function App() {
 
   const handleRemoveRoute = (from: number, to: number, weight: number) => {
     if (simulator.removeRoute(from, to, weight)) {
-      setMessage(`Route removed: ${from} ↔ ${to} (${weight}ms)`);
+      setMessage(`Route removed: ${from} → ${to} (${weight}ms)`);
       refresh();
     } else {
       setMessage('Failed to remove route');
@@ -197,19 +200,53 @@ function App() {
                 
                 {/* Path Result Display */}
                 {pathResult && (
-                  <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                    <h3 className="font-semibold text-blue-900 mb-2">
-                      Shortest Path ({pathResult.algorithm})
-                    </h3>
-                    <div className="space-y-1">
-                      <p className="text-sm text-blue-800">
-                        <strong>Distance:</strong> {pathResult.distance}ms
-                      </p>
-                      <p className="text-sm text-blue-800">
-                        <strong>Path:</strong> {pathResult.path.join(' → ')}
-                      </p>
-                    </div>
-                  </div>
+                  <>
+                    {pathResult.error ? (
+                      <div className="mt-4 p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
+                        <h3 className="font-semibold text-yellow-900 mb-2 flex items-center gap-2">
+                          ⚠️ Algorithm Error
+                        </h3>
+                        <p className="text-sm text-yellow-800">{pathResult.error}</p>
+                      </div>
+                    ) : pathResult.negativeCycle?.detected ? (
+                      <div className="mt-4 p-4 bg-red-50 border-2 border-red-300 rounded-lg">
+                        <h3 className="font-semibold text-red-900 mb-2 flex items-center gap-2">
+                          ⚠️ Negative Weight Cycle Detected!
+                        </h3>
+                        <div className="space-y-2">
+                          <p className="text-sm text-red-800">
+                            <strong>Issue:</strong> Shortest paths are undefined for affected nodes.
+                          </p>
+                          <p className="text-sm text-red-800">
+                            <strong>Reason:</strong> You can loop indefinitely through the cycle to reduce path weight.
+                          </p>
+                          <p className="text-sm text-red-800">
+                            <strong>Affected Nodes:</strong> {pathResult.negativeCycle.affectedNodes.join(', ')}
+                          </p>
+                          <div className="mt-3 p-3 bg-red-100 rounded">
+                            <p className="text-xs text-red-900 font-medium">
+                              💡 Recommendation: Remove negative weight edges or use a different algorithm. 
+                              Dijkstra's algorithm does not support negative weights.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                        <h3 className="font-semibold text-blue-900 mb-2">
+                          Shortest Path ({pathResult.algorithm})
+                        </h3>
+                        <div className="space-y-1">
+                          <p className="text-sm text-blue-800">
+                            <strong>Distance:</strong> {pathResult.distance}ms
+                          </p>
+                          <p className="text-sm text-blue-800">
+                            <strong>Path:</strong> {pathResult.path.join(' → ')}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -271,7 +308,7 @@ function App() {
                       <div>
                         <Label>Add Route</Label>
                         <p className="text-xs text-slate-500 mt-1">
-                          Multiple routes allowed between nodes. Algorithm picks the best!
+                          Multiple routes allowed. Negative weights allowed for Bellman-Ford testing!
                         </p>
                       </div>
                       <Input
@@ -288,7 +325,7 @@ function App() {
                       />
                       <Input
                         type="number"
-                        placeholder="Latency (ms)"
+                        placeholder="Latency (ms, can be negative)"
                         value={routeWeight}
                         onChange={(e) => setRouteWeight(e.target.value)}
                       />
@@ -407,21 +444,20 @@ function App() {
                   <CardHeader>
                     <CardTitle>All Routes</CardTitle>
                     <CardDescription>
-                      {nodes.reduce((sum, n) => sum + n.edges.length, 0) / 2} route(s) total
+                      {nodes.reduce((sum, n) => sum + n.edges.length, 0)} route(s) total
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2 max-h-64 overflow-y-auto">
                       {nodes.map((node) =>
                         node.edges
-                          .filter(edge => node.id < edge.destination) // Only show once per pair
                           .map((edge, idx) => (
                             <div
                               key={`route-${node.id}-${edge.destination}-${idx}`}
                               className="flex justify-between items-center text-sm p-2 bg-slate-50 rounded hover:bg-slate-100 transition-colors"
                             >
                               <span className="font-medium">
-                                {node.id} ↔ {edge.destination}
+                                {node.id} → {edge.destination}
                               </span>
                               <div className="flex items-center gap-2">
                                 <Badge variant="secondary" className="text-xs">

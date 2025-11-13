@@ -51,19 +51,14 @@ void remove_computer(int comp) {
 
 void add_route(int u, int v, int weight) {
     if (u < nodes && v < nodes && u != v) {
+        // Add only forward edge (directed graph)
         Edge* newEdge = (Edge*)malloc(sizeof(Edge));
         newEdge->destination = v;
         newEdge->weight = weight;
         newEdge->next = graph[u];
         graph[u] = newEdge;
 
-        Edge* reverseEdge = (Edge*)malloc(sizeof(Edge));
-        reverseEdge->destination = u;
-        reverseEdge->weight = weight;
-        reverseEdge->next = graph[v];
-        graph[v] = reverseEdge;
-
-        printf("Route added between %d and %d with latency %dms.\n", u, v, weight);
+        printf("Route added: %d -> %d with latency %dms.\n", u, v, weight);
     } else {
         printf("Invalid computers!\n");
     }
@@ -82,7 +77,30 @@ void display_network() {
     }
 }
 
+bool has_negative_weights() {
+    for (int i = 0; i < nodes; i++) {
+        Edge* temp = graph[i];
+        while (temp) {
+            if (temp->weight < 0) {
+                return true;
+            }
+            temp = temp->next;
+        }
+    }
+    return false;
+}
+
 void dijkstra(int start, int end) {
+    // Dijkstra's algorithm cannot handle negative weights at all
+    if (has_negative_weights()) {
+        printf("\n⚠️  ALGORITHM ERROR\n");
+        printf("=====================================\n");
+        printf("Dijkstra's algorithm cannot be used with negative edge weights.\n");
+        printf("Please use Bellman-Ford algorithm instead.\n");
+        printf("=====================================\n");
+        return;
+    }
+
     int distance[MAX_NODES];
     int previous[MAX_NODES];
     bool visited[MAX_NODES];
@@ -247,8 +265,11 @@ void bellman_ford(int start, int end) {
         if (!updated) break; // no change -> stop early
     }
 
-    // Check for negative weight cycles
+    // Check for negative weight cycles and identify affected nodes
     bool negCycle = false;
+    bool affected[MAX_NODES] = {false};
+    int affectedCount = 0;
+    
     for (int u = 0; u < nodes; u++) {
         if (distance[u] == INT_MAX) continue;
         Edge* e = graph[u];
@@ -257,7 +278,30 @@ void bellman_ford(int start, int end) {
             int w = e->weight;
             if (distance[u] + w < distance[v]) {
                 negCycle = true;
-                break;
+                
+                // Mark all nodes reachable from v as affected using BFS
+                bool visited[MAX_NODES] = {false};
+                int queue[MAX_NODES];
+                int front = 0, rear = 0;
+                queue[rear++] = v;
+                visited[v] = true;
+                
+                while (front < rear) {
+                    int node = queue[front++];
+                    if (!affected[node]) {
+                        affected[node] = true;
+                        affectedCount++;
+                    }
+                    
+                    Edge* edge = graph[node];
+                    while (edge) {
+                        if (!visited[edge->destination]) {
+                            visited[edge->destination] = true;
+                            queue[rear++] = edge->destination;
+                        }
+                        edge = edge->next;
+                    }
+                }
             }
             e = e->next;
         }
@@ -265,7 +309,24 @@ void bellman_ford(int start, int end) {
     }
 
     if (negCycle) {
-        printf("Negative weight cycle detected - shortest paths may be undefined.\n");
+        printf("\n⚠️  NEGATIVE WEIGHT CYCLE DETECTED!\n");
+        printf("=====================================\n");
+        printf("Shortest paths are UNDEFINED for affected nodes.\n");
+        printf("Reason: You can loop infinitely to reduce path weight.\n");
+        printf("\nAffected nodes: ");
+        for (int i = 0; i < nodes; i++) {
+            if (affected[i]) {
+                printf("%d ", i);
+            }
+        }
+        printf("\n\nRecommendation: Remove negative weight edges or restructure the network.\n");
+        printf("=====================================\n");
+        
+        if (affected[end]) {
+            printf("\nDestination node %d is affected by the negative cycle.\n", end);
+            printf("Cannot compute shortest path - it would be -∞ (negative infinity).\n");
+            return;
+        }
     }
 
     if (distance[end] == INT_MAX) {
